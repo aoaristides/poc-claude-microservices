@@ -24,7 +24,7 @@ public class ApplicationConfig {
 
     @Bean
     public DeliverySchedulingPolicy deliverySchedulingPolicy(ShippingProperties props) {
-        return new DeliverySchedulingPolicy(props.simulateFailure());
+        return new DeliverySchedulingPolicy(props.simulateFailure(), props.undeliverableSku());
     }
 
     @Bean

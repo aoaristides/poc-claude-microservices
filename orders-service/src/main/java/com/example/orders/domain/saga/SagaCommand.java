@@ -59,6 +59,11 @@ public record SagaCommand(
         return new SagaCommand(Type.SCHEDULE_DELIVERY, orderId, null, null, null);
     }
 
+    /** Variante com itens: o shipping precisa saber o que será entregue (enriquecida no dispatcher). */
+    public static SagaCommand scheduleDelivery(OrderId orderId, List<ReservationItem> items) {
+        return new SagaCommand(Type.SCHEDULE_DELIVERY, orderId, null, items, null);
+    }
+
     public static SagaCommand confirmOrderPayment(OrderId orderId) {
         return new SagaCommand(Type.CONFIRM_ORDER_PAYMENT, orderId, null, null, null);
     }

@@ -41,3 +41,16 @@ jobs:
       - name: Build & test
         working-directory: ${{ matrix.service }}
         run: mvn -B -ntp verify
+
+  e2e:
+    name: e2e saga (4 serviços via docker-compose)
+    runs-on: ubuntu-latest
+    # Só roda se o build/teste por serviço passou — evita gastar minutos à toa.
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ubuntu-latest já traz Docker, Compose v2, curl, jq e uuidgen.
+      - name: Teste E2E da saga (caminho feliz + 3 compensações)
+        run: ./scripts/e2e-saga.sh

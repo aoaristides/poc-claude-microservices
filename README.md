@@ -60,11 +60,16 @@ curl -i -X POST http://localhost:8080/orders \
         "clientId": "11111111-1111-1111-1111-111111111111",
         "items": [ {"sku": "SKU-1", "quantity": 2, "unitPrice": 49.90, "currency": "BRL"} ]
       }'
+
+# 4. Acompanhe o desfecho da saga (PAID quando concluída; CANCELLED se compensada)
+curl -s http://localhost:8080/orders/<orderId>   # -> {"orderId":"...","status":"PAID"}
 ```
 
 ### Exercitando compensações
 - **Pagamento recusado**: envie `unitPrice * quantity > 10000` → `payment` declina → libera reserva → pedido CANCELLED.
-- **Falha na entrega**: suba o `shipping-service` com `--shipping.simulate-failure=true` → estorna pagamento + libera reserva → CANCELLED.
+- **Falha na entrega**: inclua o SKU sentinela `SKU-FAIL-SHIP` no pedido (tem estoque e valor
+  baixo, então reserva e pagamento passam) → `shipping` recusa a entrega → estorna pagamento +
+  libera reserva → CANCELLED. Alternativa global: subir `shipping` com `--shipping.simulate-failure=true`.
 - **Estoque insuficiente**: use um `sku` inexistente ou `quantity` enorme → `inventory` responde `StockUnavailable`.
 
 ## Testes
@@ -84,12 +89,43 @@ curl -i -X POST http://localhost:8080/orders \
 > docker-java embarcado usando API antiga. O `orders-service/pom.xml` já fixa
 > `-Dapi.version=1.44` no failsafe. Ver [orders-service/README.md](orders-service/README.md).
 
+### Teste E2E da saga (os 4 serviços juntos, via docker-compose)
+
+Sobe **toda** a stack (Kafka + 4 Postgres + 4 apps em containers) e valida, ponta a ponta,
+o caminho feliz e as três compensações — cada cenário num pedido distinto, observando o
+desfecho por `GET /orders/{id}`.
+
+```bash
+./scripts/e2e-saga.sh
+```
+
+O script constrói as imagens (Dockerfile multi-stage por serviço), sobe via
+[`docker-compose.e2e.yml`](docker-compose.e2e.yml) sobreposto à infra, espera os healthchecks
+e roda os 4 cenários:
+
+| Cenário | Pedido | Desfecho esperado |
+|---|---|---|
+| Caminho feliz | `SKU-1`, valor < R$10.000 | `PAID` |
+| Pagamento recusado | `unitPrice` > R$10.000 | `CANCELLED` |
+| Estoque insuficiente | SKU inexistente | `CANCELLED` |
+| Falha de entrega | contém `SKU-FAIL-SHIP` | `CANCELLED` |
+
+Variáveis úteis: `E2E_NO_BUILD=1` (reusa imagens), `E2E_KEEP_STACK=1` (não derruba ao final),
+`E2E_TIMEOUT=120` (timeout por cenário). Requisitos: `docker`, `curl`, `jq`. Roda também no CI
+(job `e2e` em [.github/workflows/ci.yml](.github/workflows/ci.yml)), após o build por serviço.
+
+> O gatilho de falha de entrega é **per-request**: o comando `ScheduleDelivery` carrega os
+> itens do pedido e o `shipping` recusa quando encontra o SKU sentinela `SKU-FAIL-SHIP`
+> (`shipping.undeliverable-sku`). Assim os 4 cenários rodam na **mesma** stack, sem reiniciar
+> containers. O SKU sentinela é semeado com estoque no `inventory` (migration `V3`).
+
 ## Decisões e limites (declarados)
 
 - **JSON no Kafka** (decisão do projeto). Evolução para Avro/Protobuf + Schema Registry
   fica documentada, fora de escopo.
 - Fatores de replicação Kafka = 1 e seed de estoque alto: **apenas DEV**.
 - `payment` usa gateway simulado determinístico (aprova `amount <= 10000` em BRL).
-- `shipping` agenda com sucesso por padrão; `shipping.simulate-failure=true` força falha
-  para exercitar a compensação.
+- `shipping` agenda com sucesso por padrão. Falha quando o pedido contém o SKU sentinela
+  `SKU-FAIL-SHIP` (`shipping.undeliverable-sku`, gatilho per-request) ou, globalmente, com
+  `shipping.simulate-failure=true`.
 - Cada serviço tem idempotência de consumer (inbox) **e** de negócio (por `orderId`).

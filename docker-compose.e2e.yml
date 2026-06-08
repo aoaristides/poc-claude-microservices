@@ -1,0 +1,96 @@
+# Overlay que sobe os 4 serviços (apps) em cima da infra de docker-compose.yml.
+# Uso:
+#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d --build --wait
+#
+# Os apps conectam pela rede interna do compose:
+#   Kafka     -> kafka:9092            (listener PLAINTEXT interno)
+#   Postgres  -> postgres-<svc>:5432   (porta interna do container)
+# As portas de app são publicadas no host (8080-8083) para o script de teste.
+#
+# Datasource e brokers são injetados por env (relaxed binding do Spring):
+# SPRING_DATASOURCE_URL sobrepõe o localhost hardcoded no application.yml;
+# KAFKA_BROKERS já é lido via ${KAFKA_BROKERS:...} em todos os serviços.
+services:
+  orders-service:
+    build: ./orders-service
+    image: saga/orders-service:e2e
+    container_name: saga-orders
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres-orders:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-orders:5432/orders
+      KAFKA_BROKERS: kafka:9092
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  inventory-service:
+    build: ./inventory-service
+    image: saga/inventory-service:e2e
+    container_name: saga-inventory
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres-inventory:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-inventory:5432/inventory
+      KAFKA_BROKERS: kafka:9092
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8081/actuator/health | grep -q UP || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  payment-service:
+    build: ./payment-service
+    image: saga/payment-service:e2e
+    container_name: saga-payment
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres-payment:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-payment:5432/payment
+      KAFKA_BROKERS: kafka:9092
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8082/actuator/health | grep -q UP || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  shipping-service:
+    build: ./shipping-service
+    image: saga/shipping-service:e2e
+    container_name: saga-shipping
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres-shipping:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-shipping:5432/shipping
+      KAFKA_BROKERS: kafka:9092
+    ports:
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8083/actuator/health | grep -q UP || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
