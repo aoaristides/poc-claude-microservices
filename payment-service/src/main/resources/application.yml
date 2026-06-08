@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: payment-service
+  datasource:
+    url: jdbc:postgresql://localhost:5434/payment
+    username: payment
+    password: payment
+  jpa:
+    hibernate:
+      # Flyway é a fonte da verdade do schema; o JPA apenas valida o mapeamento.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:29092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      compression-type: snappy
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      group-id: payment-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      isolation-level: read_committed
+      properties:
+        max.poll.records: 50
+    listener:
+      ack-mode: manual
+      concurrency: 3
+
+server:
+  port: 8082
+
+payment:
+  authorization:
+    # Valor máximo aprovado pelo gateway simulado (BRL).
+    max-amount: 10000
+  outbox:
+    relay-delay-ms: 500
+  topics:
+    payment-commands: payment.commands.v1
+    payment-replies: payment.replies.v1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

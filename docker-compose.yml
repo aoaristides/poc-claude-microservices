@@ -1,0 +1,81 @@
+# Infra unificada da POC de saga orquestrada.
+# 1 Kafka (KRaft) compartilhado + 1 Postgres por serviço (database-per-service).
+# Os serviços rodam na IDE/maven e conectam em localhost:<porta>.
+#
+# Portas:
+#   Kafka      -> localhost:29092
+#   orders     -> app 8080, db 5432
+#   inventory  -> app 8081, db 5433
+#   payment    -> app 8082, db 5434
+#   shipping   -> app 8083, db 5435
+#
+# [suposição] Versões em tags estáveis; fatores de replicação = 1 (apenas DEV).
+services:
+  kafka:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: saga-kafka
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postgres-orders:
+    image: postgres:16
+    container_name: saga-pg-orders
+    environment: { POSTGRES_DB: orders, POSTGRES_USER: orders, POSTGRES_PASSWORD: orders }
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orders"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres-inventory:
+    image: postgres:16
+    container_name: saga-pg-inventory
+    environment: { POSTGRES_DB: inventory, POSTGRES_USER: inventory, POSTGRES_PASSWORD: inventory }
+    ports: ["5433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres-payment:
+    image: postgres:16
+    container_name: saga-pg-payment
+    environment: { POSTGRES_DB: payment, POSTGRES_USER: payment, POSTGRES_PASSWORD: payment }
+    ports: ["5434:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres-shipping:
+    image: postgres:16
+    container_name: saga-pg-shipping
+    environment: { POSTGRES_DB: shipping, POSTGRES_USER: shipping, POSTGRES_PASSWORD: shipping }
+    ports: ["5435:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shipping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

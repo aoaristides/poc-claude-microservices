@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: inventory-service
+  datasource:
+    url: jdbc:postgresql://localhost:5433/inventory
+    username: inventory
+    password: inventory
+  jpa:
+    hibernate:
+      # Flyway é a fonte da verdade do schema; o JPA apenas valida o mapeamento.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:29092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all                       # espera replicação para durabilidade
+      compression-type: snappy
+      properties:
+        enable.idempotence: true      # evita duplicação em retry interno do producer
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      group-id: inventory-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false       # commit manual após processar (ack-mode manual)
+      isolation-level: read_committed
+      properties:
+        max.poll.records: 50
+    listener:
+      ack-mode: manual
+      concurrency: 3                  # threads do consumer <= nº de partições
+
+server:
+  port: 8081
+
+inventory:
+  outbox:
+    # Intervalo do OutboxRelay para varrer mensagens pendentes (ms).
+    relay-delay-ms: 500
+  # Tópicos centralizados para facilitar leitura e criação no TopicsConfig
+  topics:
+    inventory-commands: inventory.commands.v1
+    inventory-replies: inventory.replies.v1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
