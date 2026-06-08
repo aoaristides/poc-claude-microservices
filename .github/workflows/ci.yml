@@ -1,0 +1,43 @@
+name: CI
+
+# Builda e testa os 4 serviços a cada push na main e em todo pull request.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+# Cancela execuções anteriores ainda rodando para o mesmo ref (economiza minutos).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build & test (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      # Um serviço falhando não cancela os outros — vê-se o quadro completo.
+      fail-fast: false
+      matrix:
+        service:
+          - orders-service       # roda também os testes de integração (Testcontainers)
+          - inventory-service
+          - payment-service
+          - shipping-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # `verify` cobre unit + integração. Nos serviços participantes (sem failsafe)
+      # equivale a `test`. No orders-service sobe Postgres + Kafka via Testcontainers
+      # (o runner ubuntu-latest já tem Docker disponível).
+      - name: Build & test
+        working-directory: ${{ matrix.service }}
+        run: mvn -B -ntp verify
