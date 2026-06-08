@@ -47,8 +47,8 @@ class ShippingCommandListener {
             return;
         }
 
-        String orderId = mapper.toOrderId(record);
-        useCase.execute(orderId);
+        ScheduleDeliveryCommand command = mapper.toCommand(record);
+        useCase.execute(command.orderId(), command.skus());
         inbox.markProcessed(messageId);
 
         ack.acknowledge();

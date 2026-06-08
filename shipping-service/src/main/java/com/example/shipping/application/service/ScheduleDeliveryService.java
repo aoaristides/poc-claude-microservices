@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -37,7 +38,7 @@ public class ScheduleDeliveryService implements ScheduleDeliveryUseCase {
 
     @Override
     @Transactional
-    public void execute(String orderId) {
+    public void execute(String orderId, List<String> skus) {
         Optional<Delivery> existing = deliveryRepository.findByOrderId(orderId);
 
         if (existing.isPresent()) {
@@ -49,7 +50,7 @@ public class ScheduleDeliveryService implements ScheduleDeliveryUseCase {
             return;
         }
 
-        DeliverySchedulingPolicy.SchedulingDecision decision = schedulingPolicy.decide(orderId);
+        DeliverySchedulingPolicy.SchedulingDecision decision = schedulingPolicy.decide(orderId, skus);
         Delivery delivery = Delivery.newDelivery(orderId);
 
         String trackingCode = decision.isSuccess()

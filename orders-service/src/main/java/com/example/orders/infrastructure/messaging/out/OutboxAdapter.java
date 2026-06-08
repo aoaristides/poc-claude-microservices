@@ -12,6 +12,7 @@ import com.example.orders.infrastructure.messaging.contract.OrderCancelledMessag
 import com.example.orders.infrastructure.messaging.contract.OrderPaidMessage;
 import com.example.orders.infrastructure.messaging.contract.OrderRefMessage;
 import com.example.orders.infrastructure.messaging.contract.ReserveStockMessage;
+import com.example.orders.infrastructure.messaging.contract.ScheduleDeliveryMessage;
 import com.example.orders.infrastructure.persistence.OutboxJpaEntity;
 import com.example.orders.infrastructure.persistence.OutboxJpaRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -108,7 +109,11 @@ class OutboxAdapter implements OutboxPort {
             case AUTHORIZE_PAYMENT -> new AuthorizePaymentMessage(orderId,
                     command.amount().amount(),
                     command.amount().currency().getCurrencyCode());
-            case RELEASE_RESERVATION, REFUND_PAYMENT, SCHEDULE_DELIVERY -> new OrderRefMessage(orderId);
+            case SCHEDULE_DELIVERY -> new ScheduleDeliveryMessage(orderId,
+                    command.items().stream()
+                            .map(i -> new ScheduleDeliveryMessage.Item(i.sku().value(), i.quantity()))
+                            .toList());
+            case RELEASE_RESERVATION, REFUND_PAYMENT -> new OrderRefMessage(orderId);
             case CONFIRM_ORDER_PAYMENT, CANCEL_ORDER ->
                     throw new IllegalArgumentException("comando interno sem payload externo: " + command.type());
         };

@@ -4,6 +4,7 @@ import com.example.orders.domain.exception.OrderNotFoundException;
 import com.example.orders.domain.model.Order;
 import com.example.orders.domain.port.out.OrderRepository;
 import com.example.orders.domain.port.out.OutboxPort;
+import com.example.orders.domain.saga.ReservationItem;
 import com.example.orders.domain.saga.SagaCommand;
 import org.springframework.stereotype.Component;
 
@@ -31,10 +32,23 @@ class SagaCommandDispatcher {
         for (SagaCommand command : commands) {
             if (command.isInternal()) {
                 applyInternal(command);
+            } else if (command.type() == SagaCommand.Type.SCHEDULE_DELIVERY) {
+                // O shipping decide a entregabilidade pelos itens; enriquece o comando aqui.
+                outbox.register(withOrderItems(command));
             } else {
                 outbox.register(command);
             }
         }
+    }
+
+    /** Carrega os itens do aggregate Order e devolve o ScheduleDelivery completo. */
+    private SagaCommand withOrderItems(SagaCommand command) {
+        Order order = orders.findById(command.orderId())
+                .orElseThrow(() -> new OrderNotFoundException(command.orderId()));
+        List<ReservationItem> items = order.items().stream()
+                .map(i -> new ReservationItem(i.sku(), i.quantity()))
+                .toList();
+        return SagaCommand.scheduleDelivery(command.orderId(), items);
     }
 
     private void applyInternal(SagaCommand command) {

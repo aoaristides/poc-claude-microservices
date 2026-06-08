@@ -45,8 +45,11 @@ shipping:
   outbox:
     # Intervalo do OutboxRelay para varrer mensagens pendentes (ms).
     relay-delay-ms: 500
-  # Quando true, responde DeliveryFailed para exercitar a compensação da saga.
+  # Quando true, responde DeliveryFailed para TODO pedido (falha global — uso DEV).
   simulate-failure: false
+  # SKU sentinela: dispara DeliveryFailed só para o pedido que o contém (gatilho E2E
+  # determinístico e per-request). Mantenha em sincronia com o seed do inventory-service.
+  undeliverable-sku: SKU-FAIL-SHIP
   topics:
     commands: shipping.commands.v1
     replies: shipping.replies.v1

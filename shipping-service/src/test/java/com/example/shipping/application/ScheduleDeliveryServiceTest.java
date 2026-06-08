@@ -14,6 +14,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,10 +46,10 @@ class ScheduleDeliveryServiceTest {
     void setUp() {
         serviceSuccess = new ScheduleDeliveryService(
                 deliveryRepository, outboxPort,
-                new DeliverySchedulingPolicy(false));
+                new DeliverySchedulingPolicy(false, "SKU-FAIL-SHIP"));
         serviceFailure = new ScheduleDeliveryService(
                 deliveryRepository, outboxPort,
-                new DeliverySchedulingPolicy(true));
+                new DeliverySchedulingPolicy(true, "SKU-FAIL-SHIP"));
     }
 
     @Test
@@ -56,7 +57,7 @@ class ScheduleDeliveryServiceTest {
     void execute_success_savesDeliveryAndRegistersOutbox() {
         when(deliveryRepository.findByOrderId(ORDER_ID)).thenReturn(Optional.empty());
 
-        serviceSuccess.execute(ORDER_ID);
+        serviceSuccess.execute(ORDER_ID, List.of());
 
         // Verifica que o delivery salvo está com status SCHEDULED e tem trackingCode
         ArgumentCaptor<Delivery> captor = ArgumentCaptor.forClass(Delivery.class);
@@ -77,7 +78,7 @@ class ScheduleDeliveryServiceTest {
     void execute_simulateFailure_savesFailedAndRegistersOutbox() {
         when(deliveryRepository.findByOrderId(ORDER_ID)).thenReturn(Optional.empty());
 
-        serviceFailure.execute(ORDER_ID);
+        serviceFailure.execute(ORDER_ID, List.of());
 
         ArgumentCaptor<Delivery> captor = ArgumentCaptor.forClass(Delivery.class);
         verify(deliveryRepository).save(captor.capture());
@@ -100,7 +101,7 @@ class ScheduleDeliveryServiceTest {
         when(deliveryRepository.findByOrderId(ORDER_ID)).thenReturn(Optional.of(existing));
 
         // Segunda chamada (política de falha, mas não importa — já existe)
-        serviceFailure.execute(ORDER_ID);
+        serviceFailure.execute(ORDER_ID, List.of());
 
         // NÃO deve salvar novamente
         verify(deliveryRepository, never()).save(any());
@@ -118,7 +119,7 @@ class ScheduleDeliveryServiceTest {
         existing.schedule(DeliveryStatus.FAILED, null, "motivo original");
         when(deliveryRepository.findByOrderId(ORDER_ID)).thenReturn(Optional.of(existing));
 
-        serviceSuccess.execute(ORDER_ID);  // política de sucesso, mas já existe FAILED
+        serviceSuccess.execute(ORDER_ID, List.of());  // política de sucesso, mas já existe FAILED
 
         verify(deliveryRepository, never()).save(any());
         verify(outboxPort).registerReply(argThat(d ->
